@@ -25,7 +25,7 @@ train_iter, val_iter, test_iter, train_val_iter, num_test, classes = load_data_c
 #net_1 = get_pretrained_resnet34(DEVICES)
 #net_1 = get_pretrained_resnet50(DEVICES)
 #net_2 = get_pretrained_resnet34(DEVICES)
-net_2 = get_pretrained_resnet50(DEVICES)
+net_2 = get_pretrained_resnet34(DEVICES)
 num_epochs, lr, wd = 20, 2e-4, 5e-4
 lr_period, lr_decay = 4, 0.9
 
@@ -33,6 +33,6 @@ lr_period, lr_decay = 4, 0.9
 #      train_iter, val_iter, save_train_process_to_csv='train_process_resnet50.csv')  # 只在训练样本上训练
 
 train(net_2, num_epochs, lr, wd, lr_period, lr_decay, DEVICES,
-      train_val_iter, save_train_process_to_csv='train_process_resnet50_final.csv')  # 在训练与验证样本上训练
+      train_val_iter, save_train_process_to_csv='train_process_resnet34_final.csv')  # 在训练与验证样本上训练
 
-torch.save(net_2.state_dict(), 'cifar10-pretrained_resnet50_final.params')
+torch.save(net_2.state_dict(), 'cifar10-pretrained_resnet34_final.params')
