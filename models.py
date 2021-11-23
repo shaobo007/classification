@@ -1,5 +1,7 @@
 import torch
 from torch import nn
+from torch.nn.modules.linear import Linear
+from torch.nn.modules.pooling import MaxPool2d
 import torchvision
 
 
@@ -35,9 +37,77 @@ class mlp:
     pass
 
 
-class ResNet:
-    pass
+class Residual_blk(nn.Module):  # 定义残差块
+    def __init__(self, in_channels, out_channels,
+                 need_1x1conv=False, strides=1):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels, out_channels,
+                               kernel_size=3, stride=strides, padding=1)
+        self.conv2 = nn.Conv2d(out_channels, out_channels,
+                               kernel_size=3, stride=strides, padding=1)
+        if need_1x1conv:
+            self.conv3 = nn.Conv2d(in_channels, out_channels,
+                                   kernel_size=1, stride=strides)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        self.bn2 = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        Y = self.relu(self.bn1(self.conv1(x)))
+        Y = self.bn2(self.conv2(Y))
+        if self.conv3:
+            x = self.conv3(x)
+        Y += x
+        return self.relu(Y)
 
 
-class transformer:
+class multi_Residual_blks(nn.Module):
+    def __init__(self, num_blks, in_channels, out_channels,
+                 need_1x1conv=False, strides=1):
+        super().__init__()
+        self.blks = []
+        for _ in range(num_blks):
+            self.blks.append(nn.Sequential(
+                Residual_blk(in_channels, out_channels,
+                             need_1x1conv, strides=strides)))
+            strides = 1
+            need_1x1conv = False
+            in_channels = out_channels
+
+    def forward(self, x):
+        return self.blks(x)
+
+
+class ResNet34(nn.Module):
+    def __init__(self, in_channels, num_classes):
+        super().__init__()
+        self.conv1 = nn.Sequential(nn.Conv2d(in_channels, 64,
+                                             kernel_size=7, stride=2, padding=3),
+                                   nn.BatchNorm2d(64),
+                                   nn.ReLU(inplace=True),
+                                   nn.MaxPool2d(kernel_size=3,
+                                                stride=2, padding=1)
+                                   )
+        self.res_blks1 = multi_Residual_blks(3, 64, 64)
+        self.res_blks2 = multi_Residual_blks(4, 64, 128,
+                                             need_1x1conv=True, strides=2)
+        self.res_blks3 = multi_Residual_blks(6, 128, 256,
+                                             need_1x1conv=True, strides=2)
+        self.res_blks4 = multi_Residual_blks(3, 256, 512,
+                                             need_1x1conv=True, strides=2)
+        self.pooling = nn.Sequential(nn.AdaptiveAvgPool2d(1, 1),
+                                     nn.Flatten(),
+                                     nn.Linear(512, num_classes)
+                                     )
+
+    def forward(self, x):
+        Y = self.conv1(x)
+        Y = self.res_blks1(Y)
+        Y = self.res_blks2(Y)
+        Y = self.res_blks3(Y)
+        Y = self.res_blks4(Y)
+        return self.pooling(Y)
+
+
+class transformer(nn.Module):
     pass
