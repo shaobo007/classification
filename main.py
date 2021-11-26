@@ -8,7 +8,6 @@ from dataSet import load_data_cifar10
 from train_model import train_notPretrained_model
 from models import get_pretrained_resnet34, get_pretrained_resnet50, ResNet34, ResNet
 
-
 def try_all_gpus():
     """返回所有可用的GPU，如果没有就使用cpu"""
     devices = [torch.device(f'cuda:{i}')
