@@ -20,7 +20,7 @@ VAL_RATIO = 0.1
 DEVICES = try_all_gpus()
 input_channels = 3
 num_classes = 10
-n = 18  # 层数为110的resNet
+n = 4  # 层数为110的resNet
 
 train_iter, val_iter, test_iter, train_val_iter, num_test, classes = load_data_cifar10(
     DATA_DIR, VAL_RATIO, BATCH_SIZE)  # 载入数据集
@@ -37,9 +37,9 @@ num_epochs, lr, wd = 30, 2e-4, 5e-4
 lr_period, lr_decay = 4, 0.9
 
 train_notPretrained_model(model_ResNet, num_epochs, lr, wd, lr_period, lr_decay, DEVICES,
-                          train_iter, val_iter, save_train_process_to_csv='train_process_ResNet110.csv')  # 只在训练样本上训练
+                          train_iter, val_iter, save_train_process_to_csv='train_process_ResNet26.csv')  # 只在训练样本上训练
 
 # train(ResNet, num_epochs, lr, wd, lr_period, lr_decay, DEVICES,
 #     train_val_iter, save_train_process_to_csv='train_process_resnet34_final.csv')  # 在训练与验证样本上训练
 
-torch.save(model_ResNet.state_dict(), 'cifar10-Resnet110.pth')
+torch.save(model_ResNet.state_dict(), 'cifar10-Resnet26.pth')

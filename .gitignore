@@ -2,5 +2,6 @@
 *.params
 *.csv
 *.png
+*.pth
 data/
 __pycache__/
