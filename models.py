@@ -1,11 +1,6 @@
-from tkinter.constants import NO
 import torch
 import math
 from torch import nn
-from torch._C import dtype
-from torch.nn.modules import dropout
-from torch.nn.modules.linear import Linear
-from torch.nn.modules.pooling import MaxPool2d
 import torchvision
 
 
@@ -148,12 +143,29 @@ class ResNet(nn.Module):
 '''定义一个vision transformer'''
 
 
-class Pic_Embedding(nn.Module):  # 将图片转化为token做embedding
-    def __init__(self, **kwargs):
-        super(Pic_Embedding).__init__(**kwargs)
+def Pic_Embedding(input_Pic, patch_size):
+    # assert input_Pic % patch_size == 0
+    num_patches = input_Pic.shape[2] // patch_size
+    # tokens = torch.zeros((num_patches ** 2, input_Pic.shape[0], input_Pic.shape[1], patch_size, patch_size))
+    tokens = {}
+    for i in range(num_patches):
+        for j in range(num_patches):
+            tokens[i*num_patches + j] = input_Pic[:, :, i*patch_size:(i+1)*patch_size,
+                                                  j*patch_size:(j+1)*patch_size]
+    return tokens
 
+
+class Picture_Embedding(nn.Module):
+    # 将图片转化为token做embedding
+    # 32x32 -->  4x4 patch
+    # total 8x8 patches
+    def __init__(self, picture_size, patch_size, **kwargs):
+        super(Picture_Embedding).__init__(**kwargs)
+        self.flatten = nn.Flatten()
+        self.patch_size = patch_size
     def forward(self, x):
-        pass
+        tokens = Pic_Embedding(x, self.patch_size)
+
 
 
 class Position_Encoding(nn.Module):  # 位置编码
@@ -265,36 +277,149 @@ class MuiltiHead_Attention(nn.Module):  # 多头注意力机制实现
         return self.W_o(output_concat)
 
 
-class EncoderBlk(nn.Module):
-    def __init__(self, **kwargs):
-        super(EncoderBlk).__init__(**kwargs)
+class Encoder(nn.Module):
+    def __init__(self,  **kwargs):
+        super(Encoder).__init__(**kwargs)
 
     def forward(self, x):
-        pass
+        raise NotImplementedError
+
+
+class Decoder(nn.Module):
+    def __init__(self, **kwargs):
+        super(Decoder).__init__(**kwargs)
+
+    def init_state(self, enc_outputs, *args):
+        raise NotImplementedError
+
+    def forward(self, x, state):
+        raise NotImplementedError
+
+
+class Encoder_Decoder(nn.Module):
+    def __init__(self,  **kwargs):
+        super(Encoder_Decoder).__init__(**kwargs)
+        self.encoder = encoder
+        self.decoder = decoder
+
+    def forward(self, enc_x, dec_x, *args):
+        enc_outputs = self.encoder(enc_x, *args)
+        dec_state = self.decoder.init_state(enc_outputs, *args)
+        return self.decoder(dec_x, dec_state)
+
+
+class EncoderBlk(nn.Module):
+    def __init__(self, key_size, query_size, value_size, num_hiddens,
+                 norm_shape, ffn_num_input, ffn_num_hiddens, num_heads,
+                 dropout, used_bias=False, **kwargs):
+        super(EncoderBlk).__init__(**kwargs)
+        self.attention = MuiltiHead_Attention(key_size, query_size, value_size,
+                                              num_hiddens, num_heads, dropout,
+                                              used_bias)
+        self.addnorm1 = AddNorm(norm_shape, dropout)
+        self.ffn = PositionWiseFFN(ffn_num_input, ffn_num_hiddens, num_hiddens)
+        self.addnorm2 = AddNorm(norm_shape, dropout)
+
+    def forward(self, x, valid_lens):
+        Y = self.addnorm1(x, self.attention(x, x, x, valid_lens))
+        return self.addnorm2(Y, self.ffn(Y))
 
 
 class Transformer_Encoder(nn.Module):
-    def __init__(self, **kwargs):
+    def __init__(self, vocab_size, key_size, query_size, value_size,
+                 num_hiddens, norm_shape, ffn_num_input, ffn_num_hiddens,
+                 num_heads, num_layers, dropout, use_bias=False, **kwargs):
         super(Transformer_Encoder).__init__(**kwargs)
+        self.num_hiddens = num_hiddens
+        self.embedding = nn.Embedding(vocab_size, num_hiddens)
+        self.pos_encoding = Position_Encoding(num_hiddens, dropout)
+        self.blks = nn.Sequential()
+        for i in range(num_layers):
+            self.blks.add_module("block"+str(i),
+                                 EncoderBlk(key_size, query_size, value_size,
+                                            num_hiddens, norm_shape,
+                                            ffn_num_input, ffn_num_hiddens,
+                                            num_heads, dropout, use_bias))
 
-    def forward(self, x):
-        pass
+    def forward(self, x, valid_lens, *args):
+        x = self.pos_encoding(self.embedding(x) * math.sqrt(self.num_hiddens))
+        self.attention_weights = [None] * len(self.blks)
+        for i, blk in enumerate(self.blks):
+            x = blks(x, valid_lens)
+            self.attention_weights[i] = blk.attention.attention.attention_weights
+        return x
 
 
 class DecoderBlk(nn.Module):
-    def __init__(self, **kwargs):
+    def __init__(self, key_size, query_size, value_size, num_hiddens,
+                 norm_shape, ffn_num_input, ffn_num_hiddens, num_heads,
+                 dropout, i, **kwargs):
         super(DecoderBlk).__init__(**kwargs)
+        self.i = i
+        self.attention1 = MuiltiHead_Attention(key_size, query_size, value_size,
+                                               num_hiddens, num_heads, dropout)
+        self.addnorm1 = AddNorm(norm_shape, dropout)
+        self.attention2 = MuiltiHead_Attention(key_size, query_size, value_size,
+                                               num_hiddens, num_heads, dropout)
+        self.addnorm2 = AddNorm(norm_shape, dropout)
+        self.ffn = PositionWiseFFN(ffn_num_input, ffn_num_hiddens,
+                                   num_hiddens)
+        self.addnorm3 = AddNorm(norm_shape, dropout)
 
-    def forward(self, x):
-        pass
+    def forward(self, x, state):
+        enc_outputs, enc_valid_lens = state[0], state[1]
+        if state[2][self.i] is None:
+            key_values = x
+        else:
+            key_values = torch.cat((state[2][self.i], x), axis=1)
+        state[2][self.i] = key_values
+        if self.training:
+            batch_size, num_steps, _ = x.shape
+            dec_valid_lens = torch.arange(
+                1, num_steps+1, device=x.device).repeat(batch_size, 1)
+        else:
+            dec_valid_lens = None
+
+        x2 = self.attention1(x, key_values, key_values, dec_valid_lens)
+        Y = self.addnorm1(x, x2)
+        Y2 = self.attention2(Y, enc_outputs, enc_outputs, enc_valid_lens)
+        Z = self.addnorm2(Y, Y2)
+        return self.addnorm3(Z, self.ffn(Z)), state
 
 
 class Transformer_Decoder(nn.Module):
-    def __init__(self, **kwargs):
+    def __init__(self, vocab_size, key_size, query_size, value_size,
+                 num_hiddens, norm_shape, ffn_num_input, ffn_num_hiddens,
+                 num_heads, num_layers, dropout, **kwargs):
         super(Transformer_Decoder).__init__(**kwargs)
+        self.num_hiddens = num_hiddens
+        self.num_layers = num_layers
+        self.embedding = nn.Embedding(vocab_size, num_hiddens)
+        self.pos_encoding = Position_Encoding(num_hiddens, dropout)
+        self.blks = nn.Sequential()
+        for i in range(self.num_layers):
+            self.blks.add_module("block"+str(i),
+                                 DecoderBlk(key_size, query_size, value_size,
+                                            num_hiddens, norm_shape,
+                                            ffn_num_input, ffn_num_hiddens,
+                                            num_heads, dropout))
+        self.dense = nn.Linear(num_hiddens, vocab_size)
 
-    def forward(self, x):
-        pass
+    def init_state(self, enc_outputs, enc_valid_lens, *args):
+        return [enc_outputs, enc_valid_lens, [None] * self.num_layers]
+
+    def forward(self, x, state):
+        x = self.pos_encoding(self.embedding(x) * math.sqrt(self.num_hiddens))
+        self._attention_weight = [[None] * len(self.blks) for _ in range(2)]
+        for i, blk in enumerate(self.blks):
+            x, state = blk(x, state)
+            self._attention_weight[0][i] = blk.attention1.attention.attention_weights
+            self._attention_weight[1][i] = blk.attention2.attention.attention_weights
+        return self.dense(x), state
+
+    @property
+    def attention_weights(self):
+        return self._attention_weights
 
 
 class transformer(nn.Module):
@@ -303,3 +428,13 @@ class transformer(nn.Module):
 
     def forward(self, x):
         pass
+
+
+def main():
+    x = torch.randn((1, 3, 32, 32))
+    tokens = Pic_Embedding(x, 4)
+    print(tokens[0])
+
+if __name__ == '__main__':
+    main()
+
