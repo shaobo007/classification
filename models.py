@@ -17,7 +17,6 @@ def get_pretrained_resnet34(devices):
         param.requires_grad = True
     return finetune_net
 
-
 def get_pretrained_resnet50(devices):
     finetune_net = nn.Sequential()
     finetune_net.features = torchvision.models.resnet50(pretrained=True)
@@ -36,9 +35,7 @@ class mlp:
     pass
 
 
-'''定义一个ResNet'''
-
-
+# 定义一个ResNet
 class Residual_blk(nn.Module):  # 定义残差块
     def __init__(self, in_channels, out_channels,
                  need_1x1conv=False, strides=1):
@@ -276,7 +273,6 @@ class MuiltiHead_Attention(nn.Module):  # 多头注意力机制实现
         output_concat = transpose_output(output, self.num_heads)
         return self.W_o(output_concat)
 
-
 class Encoder(nn.Module):
     def __init__(self,  **kwargs):
         super(Encoder).__init__(**kwargs)
@@ -345,7 +341,7 @@ class Transformer_Encoder(nn.Module):
         x = self.pos_encoding(self.embedding(x) * math.sqrt(self.num_hiddens))
         self.attention_weights = [None] * len(self.blks)
         for i, blk in enumerate(self.blks):
-            x = blks(x, valid_lens)
+            x = self.blks(x, valid_lens)
             self.attention_weights[i] = blk.attention.attention.attention_weights
         return x
 
