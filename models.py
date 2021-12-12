@@ -140,14 +140,14 @@ class ResNet(nn.Module):
 '''定义一个vision transformer'''
 
 
-def Pic_Embedding(input_Pic, patch_size):
+def Pic_Embedding(input_Picture, patch_size):
     # assert input_Pic % patch_size == 0
-    num_patches = input_Pic.shape[2] // patch_size
+    num_patches = input_Picture.shape[2] // patch_size
     # tokens = torch.zeros((num_patches ** 2, input_Pic.shape[0], input_Pic.shape[1], patch_size, patch_size))
     tokens = {}
     for i in range(num_patches):
         for j in range(num_patches):
-            tokens[i*num_patches + j] = input_Pic[:, :, i*patch_size:(i+1)*patch_size,
+            tokens[i*num_patches + j] = input_Picture[:, :, i*patch_size:(i+1)*patch_size,
                                                   j*patch_size:(j+1)*patch_size]
     return tokens
 
