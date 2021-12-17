@@ -60,15 +60,16 @@ def load_data_cifar10(data_dir, val_ratio, batch_size, enable_dataAugment=True):
     transform_train = None
     transform_test = None
     if enable_dataAugment is True:  # 如果需要数据增强，则给数据增强规则赋值
-        transform_train = torchvision.transforms.Compose([torchvision.transforms.Resize(40),
+        transform_train = torchvision.transforms.Compose([torchvision.transforms.Resize(80),
                                                           torchvision.transforms.RandomResizedCrop(
-                                                          32, scale=(0.64, 1.0), ratio=(1.0, 1.0)),
+                                                          64, scale=(0.64, 1.0), ratio=(1.0, 1.0)),
                                                           torchvision.transforms.RandomHorizontalFlip(),
                                                           torchvision.transforms.ToTensor(),
                                                           torchvision.transforms.Normalize([0.4914, 0.4822, 0.4465],
                                                                                            [0.2023, 0.1994, 0.2010])])
 
-        transform_test = torchvision.transforms.Compose([torchvision.transforms.ToTensor(),
+        transform_test = torchvision.transforms.Compose([torchvision.transforms.Resize(64),
+                                                         torchvision.transforms.ToTensor(),
                                                          torchvision.transforms.Normalize([0.4914, 0.4822, 0.4465],
                                                                                           [0.2023, 0.1994, 0.2010])])
     # 如果不存在train_val_test文件夹，则将原数据重新整理

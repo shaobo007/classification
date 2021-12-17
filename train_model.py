@@ -1,9 +1,10 @@
 import os
 import torch
+# import math
 from torch import nn
 from d2l import torch as d2l
-from torch._C import device
-
+# from torch._C import device
+from lr_scheduler import CosineScheduler
 
 loss = nn.CrossEntropyLoss(reduction='none')
 
@@ -61,11 +62,24 @@ def train_pretrained_model(net, num_epochs, lr, wd, lr_period, lr_decay, devices
 
 
 def train_notPretrained_model(net, num_epochs, lr, wd, lr_period, lr_decay, devices,
-                              train_iter, val_iter=None, save_train_process_to_csv='train_process_resnet.csv'):
-    trainer = torch.optim.SGD(net.parameters(), lr=lr, momentum=0.9,
+                              train_iter, val_iter=None, scheduler=False,
+                              save_train_process_to_csv='train_process_resnet.csv'):
+    trainer = torch.optim.SGD(net.parameters(),
+                              lr=lr, momentum=0.9,
                               weight_decay=wd)
-    scheduler = torch.optim.lr_scheduler.StepLR(
-        trainer, lr_period, lr_decay)  # 每过lr_period个epoch更新一次lr
+    # trainer = torch.optim.Adam(net.parameters(),
+                              # lr=lr, 
+                              # weight_decay=wd)
+    # scheduler_1 = torch.optim.lr_scheduler.CosineAnnealingLR(trainer, 15, eta_min=5e-5, last_epoch=16)
+    # scheduler_1 = torch.optim.lr_scheduler.LambdaLR(trainer, lr_lambda=lambda epoch:  1 / (0.22 * epoch + 1) if epoch < 15 else 0.25)
+    # scheduler = torch.optim.lr_scheduler.LambdaLR(trainer, lr_lambda=lambda epoch:  1 / (0.22 * epoch + 1) if epoch < 15 else 1 / (0.1 * epoch + 2.4))
+    # scheduler = torch.optim.lr_scheduler.StepLR(trainer, lr_period, lr_decay)
+    # trainer = torch.optim.Adam(net.parameters(), lr=lr,
+                               # weight_decay=wd)
+    # scheduler = torch.optim.lr_scheduler.LambdaLR(trainer, lr_lambda=lambda epoch:  epoch+1 
+                                                  # if epoch < 8 else 100/epoch)
+    # scheduler = torch.optim.lr_scheduler.StepLR(
+        # trainer, lr_period, lr_decay)  # 每过lr_period个epoch更新一次lr
 #    scheduler = torch.optim.lr_scheduler.MultiStepLR(
 #        trainer, milestones=[90,136], gamma=0.1, last_epoch=-1)
     num_batches, timer = len(train_iter), d2l.Timer()  # 定义一个计时器
@@ -101,12 +115,19 @@ def train_notPretrained_model(net, num_epochs, lr, wd, lr_period, lr_decay, devi
                 print(f'epoch {epoch + (i + 1) / num_batches:.2f}',
                       train_loss_txt, train_acc_txt)
         if val_iter is not None:
-            val_acc = d2l.evaluate_accuracy_gpu(
-                net, val_iter)  # 定义一个计算网络在验证集的准确度
+            val_acc = d2l.evaluate_accuracy_gpu(net, val_iter)  # 定义一个计算网络在验证集的准确度
             val_acc_txt = f'val_acc:{val_acc:4f}\n'
             train_process.write(val_acc_txt)
             print(val_acc_txt)
-        scheduler.step()
+        if scheduler:
+            if scheduler.__module__ == torch.optim.lr_scheduler.__name__:
+                # Using PyTorch In-Built scheduler
+                scheduler.step()
+            else:
+                # Using custom defined scheduler
+                for param_group in trainer.param_groups:
+                    param_group['lr'] = scheduler(epoch)
+
     measure = (f'train_loss: {metric[0]/metric[2]:.4f}, '
                f'train_acc: {metric[1]/metric[2]:.4f}')
     if val_iter is not None:
@@ -114,6 +135,7 @@ def train_notPretrained_model(net, num_epochs, lr, wd, lr_period, lr_decay, devi
     train_process.write(measure + f'\n{metric[2] * num_epochs / timer.sum():.1f}' +
                         f' examples/sec on {str(devices)}\n' +
                         f'total exacutive time: {timer.sum() / 60} mins\n')
+    train_process.close()
     print(measure + f'\n{metric[2] * num_epochs / timer.sum():.1f}'
           f' examples/sec on {str(devices)}\n'
           f'total exacutive time: {timer.sum() / 60:.1f} mins\n')
